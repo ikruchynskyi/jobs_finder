@@ -41,6 +41,8 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -62,6 +64,8 @@ services:
     container_name: job_automation_worker
     environment:
       DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -121,6 +125,7 @@ services:
       - "3000:3000"
     environment:
       NEXT_PUBLIC_API_URL: http://backend:8000
+      BACKEND_URL: http://backend:8000
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: change-this-secret-key
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}

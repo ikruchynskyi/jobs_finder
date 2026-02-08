@@ -71,8 +71,8 @@ async def login(
         )
     
     # Create tokens
-    access_token = create_access_token(data={"sub": user.id})
-    refresh_token = create_refresh_token(data={"sub": user.id})
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return {
         "access_token": access_token,
@@ -95,13 +95,13 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
     
     try:
         payload = jwt.decode(refresh_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-        user_id: int = payload.get("sub")
+        user_id: int = int(payload.get("sub"))
         token_type: str = payload.get("type")
         
         if user_id is None or token_type != "refresh":
             raise credentials_exception
             
-    except JWTError:
+    except (JWTError, ValueError):
         raise credentials_exception
     
     # Verify user exists
@@ -110,8 +110,8 @@ async def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
         raise credentials_exception
     
     # Create new tokens
-    new_access_token = create_access_token(data={"sub": user.id})
-    new_refresh_token = create_refresh_token(data={"sub": user.id})
+    new_access_token = create_access_token(data={"sub": str(user.id)})
+    new_refresh_token = create_refresh_token(data={"sub": str(user.id)})
     
     return {
         "access_token": new_access_token,
