@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: job_automation_db
+    environment:
+      POSTGRES_USER: jobautomation
+      POSTGRES_PASSWORD: securepassword123
+      POSTGRES_DB: jobautomation
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobautomation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching and task queue
+  redis:
+    image: redis:7-alpine
+    container_name: job_automation_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: job_automation_api
+    ports:
+      - "8000:8000"
+    environment:
+      DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - ./storage:/app/storage
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Celery Worker for background tasks
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: job_automation_worker
+    environment:
+      DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./backend:/app
+      - ./storage:/app/storage
+    command: celery -A app.workers.celery_worker worker --loglevel=info
+
+  # Selenium Grid Hub (for scalable browser automation)
+  selenium-hub:
+    image: selenium/hub:4.16.1
+    container_name: selenium_hub
+    ports:
+      - "4444:4444"
+      - "4442:4442"
+      - "4443:4443"
+
+  # Chrome Node for Selenium
+  chrome:
+    image: selenium/node-chrome:4.16.1
+    container_name: selenium_chrome
+    depends_on:
+      - selenium-hub
+    environment:
+      SE_EVENT_BUS_HOST: selenium-hub
+      SE_EVENT_BUS_PUBLISH_PORT: 4442
+      SE_EVENT_BUS_SUBSCRIBE_PORT: 4443
+      SE_NODE_MAX_SESSIONS: 5
+    shm_size: 2gb
+    volumes:
+      - ./storage:/storage
+
+  # MinIO for S3-compatible storage (optional, for local development)
+  minio:
+    image: minio/minio:latest
+    container_name: job_automation_storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+
+  # Next.js Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: job_automation_frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://backend:8000
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: change-this-secret-key
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
