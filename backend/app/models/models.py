@@ -87,7 +87,7 @@ class Job(Base):
     source_url = Column(String, nullable=False)
     posted_date = Column(DateTime)
     expires_date = Column(DateTime)
-    metadata = Column(JSON)  # Additional platform-specific data
+    job_metadata = Column(JSON)  # Additional platform-specific data
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

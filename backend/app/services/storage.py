@@ -29,7 +29,7 @@ class StorageService:
             self.use_s3 = True
         else:
             self.use_s3 = False
-            self.local_storage_path = Path("/home/claude/storage")
+            self.local_storage_path = Path("/app/storage")
             self.local_storage_path.mkdir(exist_ok=True)
     
     async def upload_file(self, file: UploadFile, user_id: int, file_type: str) -> str:
