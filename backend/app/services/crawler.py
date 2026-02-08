@@ -36,8 +36,17 @@ class JobCrawler:
         options.add_argument('--disable-blink-features=AutomationControlled')
         options.add_argument(f'user-agent={settings.CRAWLER_USER_AGENT}')
         
-        self.driver = webdriver.Chrome(options=options)
-        self.driver.implicitly_wait(settings.SELENIUM_TIMEOUT)
+        try:
+            logger.info(f"Connecting to Selenium Grid at {settings.SELENIUM_URL}")
+            self.driver = webdriver.Remote(
+                command_executor=settings.SELENIUM_URL,
+                options=options
+            )
+            self.driver.implicitly_wait(settings.SELENIUM_TIMEOUT)
+            logger.info("Successfully connected to Selenium Grid")
+        except Exception as e:
+            logger.error(f"Failed to connect to Selenium Grid: {e}")
+            raise
         
     def _close_driver(self):
         """Close the WebDriver"""
@@ -131,7 +140,7 @@ class JobCrawler:
             link = card.find_element(By.TAG_NAME, "a").get_attribute("href")
             
             # Extract job ID from URL
-            job_id_match = re.search(r'/jobs/view/(\d+)', link)
+            job_id_match = re.search(r'/jobs/view/.*?(\d+)', link)
             external_id = f"linkedin_{job_id_match.group(1)}" if job_id_match else None
             
             return {

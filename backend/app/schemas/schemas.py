@@ -62,7 +62,7 @@ class JobCreate(JobBase):
 
 class JobResponse(JobBase):
     id: int
-    external_id: str
+    external_id: Optional[str] = None
     posted_date: Optional[datetime]
     is_active: bool
     created_at: datetime

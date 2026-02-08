@@ -43,6 +43,7 @@ services:
       DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM}
+      SELENIUM_URL: http://selenium-hub:4444/wd/hub
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
@@ -66,6 +67,7 @@ services:
       DATABASE_URL: postgresql://jobautomation:securepassword123@postgres:5432/jobautomation
       SECRET_KEY: ${SECRET_KEY}
       ALGORITHM: ${ALGORITHM}
+      SELENIUM_URL: http://selenium-hub:4444/wd/hub
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0

@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     # Selenium Settings
     SELENIUM_HEADLESS: bool = True
     SELENIUM_TIMEOUT: int = 30
+    SELENIUM_URL: str = "http://selenium-hub:4444/wd/hub"
     MAX_CONCURRENT_APPLICATIONS: int = 5
     
     # Job Crawler Settings
