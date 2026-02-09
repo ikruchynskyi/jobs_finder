@@ -14,6 +14,7 @@ import {
   Zap,
   Moon,
   Sun,
+  BarChart3,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import Link from 'next/link';
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Jobs', href: '/dashboard/jobs', icon: Briefcase },
   { name: 'Applications', href: '/dashboard/applications', icon: FileText },
   { name: 'Profile', href: '/dashboard/profile', icon: User },
+  { name: 'AI Usage', href: '/dashboard/ai-usage', icon: BarChart3 },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings },
 ];
 

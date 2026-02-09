@@ -15,6 +15,7 @@ from app.schemas.schemas import (
     UserProfileResponse
 )
 from app.services.storage import upload_file_to_storage
+from app.core.crypto import encrypt_value, decrypt_value
 
 router = APIRouter()
 
@@ -181,7 +182,8 @@ async def set_gemini_key(
         profile = UserProfile(user_id=current_user.id)
         db.add(profile)
     
-    profile.gemini_api_key = key_data.get('api_key')
+    raw_key = key_data.get('api_key', '')
+    profile.gemini_api_key = encrypt_value(raw_key) if raw_key else None
     db.commit()
     return {"message": "API Key saved successfully"}
 
@@ -194,6 +196,75 @@ async def delete_user_account(
     db.delete(current_user)
     db.commit()
     return {"message": "Account deleted successfully"}
+
+
+from sqlalchemy import func
+from datetime import datetime
+from app.models.models import AIUsageLog
+from app.schemas.schemas import AIUsageStatsResponse, AIUsageByService
+
+@router.get("/ai-usage/stats", response_model=AIUsageStatsResponse)
+async def get_ai_usage_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """Get AI usage statistics for the current user"""
+    base_query = db.query(AIUsageLog).filter(AIUsageLog.user_id == current_user.id)
+
+    total_requests = base_query.count()
+
+    totals = db.query(
+        func.coalesce(func.sum(AIUsageLog.total_tokens), 0),
+        func.coalesce(func.sum(AIUsageLog.input_tokens), 0),
+        func.coalesce(func.sum(AIUsageLog.output_tokens), 0),
+    ).filter(AIUsageLog.user_id == current_user.id).first()
+
+    total_tokens = int(totals[0])
+    total_input_tokens = int(totals[1])
+    total_output_tokens = int(totals[2])
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    today_query = base_query.filter(AIUsageLog.created_at >= today_start)
+
+    requests_today = today_query.count()
+    tokens_today_result = db.query(
+        func.coalesce(func.sum(AIUsageLog.total_tokens), 0)
+    ).filter(
+        AIUsageLog.user_id == current_user.id,
+        AIUsageLog.created_at >= today_start
+    ).scalar()
+    tokens_today = int(tokens_today_result)
+
+    by_service_rows = db.query(
+        AIUsageLog.service_type,
+        func.count(AIUsageLog.id),
+        func.coalesce(func.sum(AIUsageLog.total_tokens), 0),
+        func.coalesce(func.sum(AIUsageLog.input_tokens), 0),
+        func.coalesce(func.sum(AIUsageLog.output_tokens), 0),
+    ).filter(
+        AIUsageLog.user_id == current_user.id
+    ).group_by(AIUsageLog.service_type).all()
+
+    by_service = [
+        AIUsageByService(
+            service_type=row[0],
+            request_count=row[1],
+            total_tokens=int(row[2]),
+            total_input_tokens=int(row[3]),
+            total_output_tokens=int(row[4]),
+        )
+        for row in by_service_rows
+    ]
+
+    return AIUsageStatsResponse(
+        total_requests=total_requests,
+        total_tokens=total_tokens,
+        total_input_tokens=total_input_tokens,
+        total_output_tokens=total_output_tokens,
+        requests_today=requests_today,
+        tokens_today=tokens_today,
+        by_service=by_service,
+    )
 
 
 from app.services.applicator import JobApplicator
@@ -222,11 +293,11 @@ async def connect_linkedin(
             profile = UserProfile(user_id=current_user.id)
             db.add(profile)
         
-        profile.linkedin_cookies = cookie
-        profile.linkedin_url = f"https://www.linkedin.com/in/{current_user.username}" # heuristic
+        profile.linkedin_cookies = encrypt_value(cookie)
+        profile.linkedin_url = f"https://www.linkedin.com/in/{current_user.username}"  # heuristic
         db.commit()
-        
-        return {"message": "Successfully connected to LinkedIn", "cookie": cookie}
+
+        return {"message": "Successfully connected to LinkedIn"}
         
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))

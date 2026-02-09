@@ -62,35 +62,21 @@ const authOptions: NextAuthOptions = {
     async signIn({ user, account, profile }) {
       if (account?.provider === 'google') {
         try {
-          // Register/login user in backend with Google info
-          const response = await axios.post(`${API_URL}/api/v1/auth/register`, {
+          // Single endpoint: registers if new, logs in if existing — no password needed
+          const response = await axios.post(`${API_URL}/api/v1/auth/oauth/google`, {
             email: user.email,
             username: user.email?.split('@')[0],
-            password: Math.random().toString(36).slice(-8), // Random password for OAuth users
             full_name: user.name,
+            provider: 'google',
           });
 
-          // If user already exists, login
-          if (response.status === 201 || response.status === 400) {
-            const formData = new URLSearchParams();
-            formData.append('username', user.email || '');
-            formData.append('password', Math.random().toString(36).slice(-8));
-
-            const loginResponse = await axios.post(
-              `${API_URL}/api/v1/auth/login`,
-              formData,
-              {
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-              }
-            );
-
-            if (loginResponse.data.access_token) {
-              user.accessToken = loginResponse.data.access_token;
-              user.refreshToken = loginResponse.data.refresh_token;
-            }
+          if (response.data.access_token) {
+            user.accessToken = response.data.access_token;
+            user.refreshToken = response.data.refresh_token;
           }
         } catch (error) {
           console.error('Google sign-in error:', error);
+          return false;
         }
       }
       return true;

@@ -4,19 +4,45 @@ Core Configuration
 from pydantic_settings import BaseSettings
 from typing import List
 import secrets
+import os
+
+
+# Generate a stable secret key: persist to .env so it survives restarts
+def _get_or_create_secret_key() -> str:
+    """Return SECRET_KEY from env, or generate one and persist it."""
+    key = os.environ.get("SECRET_KEY")
+    if key:
+        return key
+    # Generate and persist so JWT tokens survive restarts
+    key = secrets.token_urlsafe(64)
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), ".env")
+    try:
+        lines = []
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                lines = f.readlines()
+        # Append SECRET_KEY if not already present
+        has_key = any(line.strip().startswith("SECRET_KEY=") for line in lines)
+        if not has_key:
+            with open(env_path, "a") as f:
+                f.write(f"\nSECRET_KEY={key}\n")
+    except OSError:
+        pass  # In containers without write access, key lives in memory this run
+    return key
 
 
 class Settings(BaseSettings):
     # API Settings
     API_V1_PREFIX: str = "/api/v1"
     PROJECT_NAME: str = "Job Automation Platform"
-    
+
     # Security
-    SECRET_KEY: str = secrets.token_urlsafe(32)
+    SECRET_KEY: str = _get_or_create_secret_key()
+    ENCRYPTION_KEY: str = ""  # Fernet key for encrypting sensitive fields
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
-    
+
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/jobautomation"
     

@@ -13,7 +13,7 @@ from app.core.security import (
     create_refresh_token
 )
 from app.models.models import User
-from app.schemas.schemas import UserCreate, UserResponse, Token, UserLogin
+from app.schemas.schemas import UserCreate, UserResponse, Token, UserLogin, OAuthRegisterLogin
 
 router = APIRouter()
 
@@ -78,6 +78,40 @@ async def login(
         "access_token": access_token,
         "refresh_token": refresh_token,
         "token_type": "bearer"
+    }
+
+
+@router.post("/oauth/google", response_model=Token)
+async def oauth_google(
+    oauth_data: OAuthRegisterLogin,
+    db: Session = Depends(get_db)
+):
+    """Register or login via Google OAuth. Returns tokens directly (no password needed)."""
+    import secrets as _secrets
+
+    user = db.query(User).filter(User.email == oauth_data.email).first()
+
+    if not user:
+        # First-time Google user — register with a random password they'll never use
+        user = User(
+            email=oauth_data.email,
+            username=oauth_data.username,
+            full_name=oauth_data.full_name,
+            hashed_password=get_password_hash(_secrets.token_urlsafe(32)),
+            auth_provider=oauth_data.provider,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    # Issue tokens directly — no password check for OAuth users
+    access_token = create_access_token(data={"sub": str(user.id)})
+    refresh_token = create_refresh_token(data={"sub": str(user.id)})
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
     }
 
 

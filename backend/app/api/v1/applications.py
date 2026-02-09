@@ -9,7 +9,7 @@ from datetime import datetime
 from app.core.database import get_db
 from app.core.security import get_current_active_user
 from app.models.models import JobApplication, Job, User, ApplicationStatus
-from app.schemas.schemas import ApplicationCreate, ApplicationResponse
+from app.schemas.schemas import ApplicationCreate, ApplicationResponse, BatchApplicationCreate
 from app.services.applicator import apply_to_job_task
 
 router = APIRouter()
@@ -82,6 +82,64 @@ async def apply_to_job(
     )
     
     return application
+
+
+@router.post("/batch-apply")
+async def batch_apply(
+    batch_data: BatchApplicationCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Apply to multiple jobs at once. Skips duplicates and queues each application."""
+    results = {"queued": [], "skipped": [], "not_found": []}
+
+    for job_id in batch_data.job_ids:
+        job = db.query(Job).filter(Job.id == job_id).first()
+        if not job:
+            results["not_found"].append(job_id)
+            continue
+
+        # Skip if already applied (and not failed)
+        existing = db.query(JobApplication).filter(
+            JobApplication.user_id == current_user.id,
+            JobApplication.job_id == job_id,
+        ).first()
+
+        if existing and existing.status != ApplicationStatus.FAILED:
+            results["skipped"].append(job_id)
+            continue
+
+        if existing and existing.status == ApplicationStatus.FAILED:
+            # Reset and retry
+            existing.status = ApplicationStatus.PENDING
+            existing.error_message = None
+            existing.automation_log = None
+            existing.applied_at = None
+            existing.created_at = datetime.utcnow()
+            db.commit()
+            background_tasks.add_task(apply_to_job_task, existing.id, current_user.id, job.id)
+            results["queued"].append(job_id)
+            continue
+
+        application = JobApplication(
+            user_id=current_user.id,
+            job_id=job_id,
+            status=ApplicationStatus.PENDING,
+            resume_used=batch_data.resume_url,
+            cover_letter_used=batch_data.cover_letter,
+        )
+        db.add(application)
+        db.commit()
+        db.refresh(application)
+
+        background_tasks.add_task(apply_to_job_task, application.id, current_user.id, job.id)
+        results["queued"].append(job_id)
+
+    return {
+        "message": f"Queued {len(results['queued'])} applications",
+        **results,
+    }
 
 
 @router.get("/", response_model=List[ApplicationResponse])

@@ -23,6 +23,14 @@ class UserLogin(BaseModel):
     password: str
 
 
+class OAuthRegisterLogin(BaseModel):
+    """Register or login via OAuth (Google). No password needed."""
+    email: EmailStr
+    username: str
+    full_name: Optional[str] = None
+    provider: str = "google"
+
+
 class LinkedInLoginRequest(BaseModel):
     email: EmailStr
     password: str
@@ -94,6 +102,13 @@ class ApplicationCreate(ApplicationBase):
     cover_letter: Optional[str] = None
 
 
+class BatchApplicationCreate(BaseModel):
+    """Apply to multiple jobs at once."""
+    job_ids: List[int] = Field(..., min_length=1, max_length=50)
+    resume_url: Optional[str] = None
+    cover_letter: Optional[str] = None
+
+
 class ApplicationResponse(ApplicationBase):
     id: int
     user_id: int
@@ -145,6 +160,25 @@ class CrawlerJobCreate(BaseModel):
     search_query: str
     location: Optional[str] = None
     source: JobSource
+
+
+# AI Usage Schemas
+class AIUsageByService(BaseModel):
+    service_type: str
+    request_count: int
+    total_tokens: int
+    total_input_tokens: int
+    total_output_tokens: int
+
+
+class AIUsageStatsResponse(BaseModel):
+    total_requests: int
+    total_tokens: int
+    total_input_tokens: int
+    total_output_tokens: int
+    requests_today: int
+    tokens_today: int
+    by_service: List[AIUsageByService]
 
 
 class CrawlerJobResponse(BaseModel):
