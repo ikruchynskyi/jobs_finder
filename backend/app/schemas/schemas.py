@@ -23,6 +23,11 @@ class UserLogin(BaseModel):
     password: str
 
 
+class LinkedInLoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class UserResponse(UserBase):
     id: int
     is_active: bool
@@ -109,6 +114,7 @@ class UserProfileBase(BaseModel):
     skills: Optional[List[str]] = None
     experience_years: Optional[int] = None
     linkedin_url: Optional[str] = None
+    linkedin_cookies: Optional[str] = None
     github_url: Optional[str] = None
     portfolio_url: Optional[str] = None
     phone: Optional[str] = None

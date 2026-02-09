@@ -4,6 +4,7 @@ Job Applications API Routes
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, Query
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime
 
 from app.core.database import get_db
 from app.core.security import get_current_active_user
@@ -34,6 +35,26 @@ async def apply_to_job(
     ).first()
     
     if existing:
+        if existing.status == ApplicationStatus.FAILED:
+            # Reset and retry
+            existing.status = ApplicationStatus.PENDING
+            existing.error_message = None
+            existing.automation_log = None
+            existing.applied_at = None
+            existing.created_at = datetime.utcnow()
+            
+            db.commit()
+            db.refresh(existing)
+            
+            # Queue background task
+            background_tasks.add_task(
+                apply_to_job_task,
+                existing.id,
+                current_user.id,
+                job.id
+            )
+            return existing
+            
         raise HTTPException(
             status_code=400,
             detail="Already applied to this job"

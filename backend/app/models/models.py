@@ -43,6 +43,7 @@ class User(Base):
     
     # Relationships
     profiles = relationship("UserProfile", back_populates="user", cascade="all, delete-orphan")
+    resumes = relationship("Resume", back_populates="user", cascade="all, delete-orphan")
     applications = relationship("JobApplication", back_populates="user", cascade="all, delete-orphan")
     saved_jobs = relationship("SavedJob", back_populates="user", cascade="all, delete-orphan")
 
@@ -57,6 +58,8 @@ class UserProfile(Base):
     skills = Column(JSON)  # ["Python", "JavaScript", "AWS"]
     experience_years = Column(Integer)
     linkedin_url = Column(String)
+    linkedin_cookies = Column(String)  # Store li_at cookie
+    gemini_api_key = Column(String)    # Store Gemini API Key
     github_url = Column(String)
     portfolio_url = Column(String)
     phone = Column(String)
@@ -109,6 +112,7 @@ class JobApplication(Base):
     applied_at = Column(DateTime)
     error_message = Column(Text)
     automation_log = Column(JSON)  # Log of automation steps
+    screenshot_url = Column(String)  # URL to error screenshot
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -144,4 +148,19 @@ class CrawlerJob(Base):
     started_at = Column(DateTime)
     completed_at = Column(DateTime)
     error_message = Column(Text)
+    screenshot_url = Column(String)  # URL to error screenshot
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class Resume(Base):
+    __tablename__ = "resumes"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    file_url = Column(String, nullable=False)
+    file_name = Column(String, nullable=False)
+    extracted_text = Column(Text)  # Cached content
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    user = relationship("User", back_populates="resumes")

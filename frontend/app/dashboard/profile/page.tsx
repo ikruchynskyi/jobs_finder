@@ -15,6 +15,9 @@ import {
   Globe,
   Github,
   Linkedin,
+  Sparkles,
+  Key,
+  Trash2,
 } from 'lucide-react';
 import { useDropzone } from 'react-dropzone';
 import axios from 'axios';
@@ -31,6 +34,7 @@ export default function ProfilePage() {
     phone: '',
     location: '',
     linkedin_url: '',
+    linkedin_cookies: '',
     github_url: '',
     portfolio_url: '',
     experience_years: 0,
@@ -40,29 +44,60 @@ export default function ProfilePage() {
   });
   const [newSkill, setNewSkill] = useState('');
 
+  // New state for AI features
+  const [resumes, setResumes] = useState<{ id: number, file_name: string }[]>([]);
+  const [geminiKey, setGeminiKey] = useState('');
+
+  // Fetch Profile and Resumes
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       try {
-        const response = await axios.get(`${API_URL}/api/v1/users/profile`, {
-          headers: { Authorization: `Bearer ${session?.accessToken}` },
-        });
-        setProfile({
-          ...response.data,
-          skills: response.data.skills || [],
-        });
-      } catch (error: any) {
-        if (error.response?.status !== 404) {
-          toast.error('Failed to load profile');
+        const [profileRes, resumesRes] = await Promise.all([
+          axios.get(`${API_URL}/api/v1/users/profile`, {
+            headers: { Authorization: `Bearer ${session?.accessToken}` },
+          }).catch(e => ({ data: {} })), // Handle 404 gracefully
+          axios.get(`${API_URL}/api/v1/users/resumes`, {
+            headers: { Authorization: `Bearer ${session?.accessToken}` },
+          }).catch(e => ({ data: [] }))
+        ]);
+
+        if (profileRes.data) {
+          setProfile(prev => ({
+            ...prev,
+            ...profileRes.data,
+            skills: profileRes.data.skills || [],
+          }));
+          // If API key is returned in profile (it usually isn't for security, but if we stored it)
+          // For now assuming we don't get it back or handled separately. 
+          if (profileRes.data.gemini_api_key) setGeminiKey(profileRes.data.gemini_api_key);
         }
+
+        if (resumesRes.data) {
+          setResumes(resumesRes.data);
+        }
+
+      } catch (error: any) {
+        console.error("Error fetching data", error);
+        toast.error('Failed to load profile data');
       } finally {
         setLoading(false);
       }
     };
 
     if (session?.accessToken) {
-      fetchProfile();
+      fetchData();
     }
   }, [session]);
+
+  const handleGeminiKeySave = async () => {
+    try {
+      await axios.post(`${API_URL}/api/v1/users/gemini-key`,
+        { api_key: geminiKey },
+        { headers: { Authorization: `Bearer ${session?.accessToken}` } }
+      );
+      toast.success('Gemini API Key saved!');
+    } catch (e) { toast.error('Failed to save API key'); }
+  };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
@@ -72,6 +107,8 @@ export default function ProfilePage() {
     formData.append('file', file);
 
     setUploading(true);
+    const toastId = toast.loading('Uploading and analyzing resume...');
+
     try {
       const response = await axios.post(
         `${API_URL}/api/v1/users/upload-resume`,
@@ -85,9 +122,16 @@ export default function ProfilePage() {
       );
 
       setProfile((prev) => ({ ...prev, resume_url: response.data.file_url }));
-      toast.success('Resume uploaded successfully!');
+
+      // Refresh resumes list
+      const resumesRes = await axios.get(`${API_URL}/api/v1/users/resumes`, {
+        headers: { Authorization: `Bearer ${session?.accessToken}` },
+      });
+      setResumes(resumesRes.data);
+
+      toast.success('Resume uploaded successfully!', { id: toastId });
     } catch (error) {
-      toast.error('Failed to upload resume');
+      toast.error('Failed to upload resume', { id: toastId });
     } finally {
       setUploading(false);
     }
@@ -97,7 +141,6 @@ export default function ProfilePage() {
     onDrop,
     accept: {
       'application/pdf': ['.pdf'],
-      'application/msword': ['.doc'],
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
     },
     maxFiles: 1,
@@ -172,68 +215,92 @@ export default function ProfilePage() {
           Profile Settings
         </h1>
         <p className="text-gray-600 dark:text-gray-400">
-          Manage your profile and upload your resume
+          Manage your profile, resumes, and AI settings
         </p>
       </div>
 
-      {/* Resume Upload */}
+      {/* AI & Resume Settings */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="glass rounded-2xl p-6 border border-gray-200 dark:border-gray-800"
       >
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-          Resume
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-purple-500" />
+          AI Resume Matching (Gemini)
         </h2>
 
-        {profile.resume_url ? (
-          <div className="flex items-center justify-between p-4 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-3">
-              <FileText className="w-6 h-6 text-green-600 dark:text-green-400" />
-              <div>
-                <p className="font-medium text-green-900 dark:text-green-100">
-                  Resume uploaded
-                </p>
-                <p className="text-sm text-green-700 dark:text-green-300">
-                  {profile.resume_url.split('/').pop()}
-                </p>
-              </div>
-            </div>
+        <div className="mb-8 p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-100 dark:border-purple-800/30">
+          <label className="block text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">
+            Google Gemini API Key
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              value={geminiKey}
+              onChange={(e) => setGeminiKey(e.target.value)}
+              placeholder="Enter your Gemini API key"
+              className="flex-1 px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
             <button
-              onClick={() =>
-                setProfile((prev) => ({ ...prev, resume_url: '' }))
-              }
-              className="px-4 py-2 rounded-lg bg-green-600 text-white hover:bg-green-700 transition-colors"
+              onClick={handleGeminiKeySave}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm"
             >
-              Replace
+              Save
             </button>
           </div>
-        ) : (
-          <div
-            {...getRootProps()}
-            className={`
-              border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
-              ${
-                isDragActive
-                  ? 'border-teal-500 bg-teal-50 dark:bg-teal-900/20'
-                  : 'border-gray-300 dark:border-gray-700 hover:border-teal-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
-              }
+          <p className="text-xs text-gray-500 mt-2">
+            Required for intelligent resume selection and automated form filling.
+            <a href="https://makersuite.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline ml-1">
+              Get a key here
+            </a>
+          </p>
+        </div>
+
+        <h3 className="font-semibold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+          <FileText className="w-4 h-4" />
+          Uploaded Resumes
+        </h3>
+
+        <div className="space-y-2 mb-4">
+          {resumes.map(resume => (
+            <div key={resume.id} className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                  <FileText className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </div>
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{resume.file_name}</span>
+              </div>
+            </div>
+          ))}
+          {resumes.length === 0 && (
+            <p className="text-sm text-gray-500 italic p-2">No resumes uploaded yet.</p>
+          )}
+        </div>
+
+        <div
+          {...getRootProps()}
+          className={`
+                border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all
+                ${isDragActive
+              ? 'border-purple-500 bg-purple-50 dark:bg-purple-900/20'
+              : 'border-gray-300 dark:border-gray-700 hover:border-purple-500 hover:bg-gray-50 dark:hover:bg-gray-800/50'
+            }
             `}
-          >
-            <input {...getInputProps()} />
-            {uploading ? (
-              <Loader2 className="w-12 h-12 mx-auto mb-4 text-teal-600 animate-spin" />
-            ) : (
-              <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-            )}
-            <p className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-              {isDragActive ? 'Drop your resume here' : 'Upload your resume'}
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Drag and drop or click to browse (PDF, DOC, DOCX - Max 10MB)
-            </p>
-          </div>
-        )}
+        >
+          <input {...getInputProps()} />
+          {uploading ? (
+            <Loader2 className="w-10 h-10 mx-auto mb-3 text-purple-600 animate-spin" />
+          ) : (
+            <Upload className="w-10 h-10 mx-auto mb-3 text-gray-400" />
+          )}
+          <p className="font-medium text-gray-900 dark:text-white">
+            {isDragActive ? 'Drop your resume here' : 'Upload another resume'}
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            PDF or DOCX (Max 10MB)
+          </p>
+        </div>
       </motion.div>
 
       {/* Personal Information */}
@@ -255,11 +322,11 @@ export default function ProfilePage() {
             </label>
             <input
               type="tel"
-              value={profile.phone}
+              value={profile.phone || ''}
               onChange={(e) =>
                 setProfile({ ...profile, phone: e.target.value })
               }
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
               placeholder="+1 (555) 123-4567"
             />
           </div>
@@ -271,11 +338,11 @@ export default function ProfilePage() {
             </label>
             <input
               type="text"
-              value={profile.location}
+              value={profile.location || ''}
               onChange={(e) =>
                 setProfile({ ...profile, location: e.target.value })
               }
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
               placeholder="San Francisco, CA"
             />
           </div>
@@ -287,13 +354,96 @@ export default function ProfilePage() {
             </label>
             <input
               type="url"
-              value={profile.linkedin_url}
+              value={profile.linkedin_url || ''}
               onChange={(e) =>
                 setProfile({ ...profile, linkedin_url: e.target.value })
               }
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
               placeholder="https://linkedin.com/in/yourprofile"
             />
+          </div>
+
+          {/* LinkedIn Login Section */}
+          <div className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 bg-blue-50 dark:bg-blue-900/10 col-span-1 md:col-span-2">
+            <label className="block text-sm font-medium mb-4 text-gray-700 dark:text-gray-300">
+              <span className="flex items-center gap-2">
+                <Linkedin className="w-4 h-4 text-blue-600" />
+                Connect LinkedIn
+              </span>
+            </label>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <input
+                  type="email"
+                  placeholder="LinkedIn Email"
+                  id="linkedin-email"
+                  className="px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+                <input
+                  type="password"
+                  placeholder="LinkedIn Password"
+                  id="linkedin-password"
+                  className="px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
+                />
+              </div>
+
+              <button
+                onClick={async () => {
+                  const email = (document.getElementById('linkedin-email') as HTMLInputElement).value;
+                  const password = (document.getElementById('linkedin-password') as HTMLInputElement).value;
+
+                  if (!email || !password) {
+                    toast.error('Please enter email and password');
+                    return;
+                  }
+
+                  const btn = document.getElementById('connect-btn');
+                  if (btn) btn.innerHTML = 'Connecting... (this may take up to 30s)';
+
+                  try {
+                    await axios.post(`${API_URL}/api/v1/users/connect-linkedin`, {
+                      email,
+                      password
+                    }, {
+                      headers: { Authorization: `Bearer ${session?.accessToken}` },
+                    });
+                    toast.success('Successfully connected to LinkedIn!');
+                    window.location.reload();
+                  } catch (error: any) {
+                    toast.error(error.response?.data?.detail || 'Connection failed. Try manual cookie entry.');
+                  } finally {
+                    if (btn) btn.innerHTML = 'Connect';
+                  }
+                }}
+                id="connect-btn"
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+              >
+                Connect
+              </button>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <details className="text-sm">
+                <summary className="cursor-pointer text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 select-none font-medium">
+                  Alternative: Enter Cookie Manually
+                </summary>
+                <div className="mt-3">
+                  <label className="block text-xs text-gray-500 mb-1">
+                    LinkedIn Session Cookie (li_at)
+                  </label>
+                  <input
+                    type="password"
+                    value={profile.linkedin_cookies || ''}
+                    onChange={(e) =>
+                      setProfile({ ...profile, linkedin_cookies: e.target.value })
+                    }
+                    className="w-full px-4 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm focus:ring-2 focus:ring-teal-500 outline-none"
+                    placeholder="Paste li_at cookie here"
+                  />
+                </div>
+              </details>
+            </div>
           </div>
 
           <div>
@@ -303,11 +453,11 @@ export default function ProfilePage() {
             </label>
             <input
               type="url"
-              value={profile.github_url}
+              value={profile.github_url || ''}
               onChange={(e) =>
                 setProfile({ ...profile, github_url: e.target.value })
               }
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
               placeholder="https://github.com/yourusername"
             />
           </div>
@@ -319,11 +469,11 @@ export default function ProfilePage() {
             </label>
             <input
               type="url"
-              value={profile.portfolio_url}
+              value={profile.portfolio_url || ''}
               onChange={(e) =>
                 setProfile({ ...profile, portfolio_url: e.target.value })
               }
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
               placeholder="https://yourportfolio.com"
             />
           </div>
@@ -334,7 +484,7 @@ export default function ProfilePage() {
             </label>
             <input
               type="number"
-              value={profile.experience_years}
+              value={profile.experience_years || 0}
               onChange={(e) =>
                 setProfile({
                   ...profile,
@@ -342,7 +492,7 @@ export default function ProfilePage() {
                 })
               }
               min="0"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
             />
           </div>
         </div>
@@ -365,7 +515,7 @@ export default function ProfilePage() {
             value={newSkill}
             onChange={(e) => setNewSkill(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && addSkill()}
-            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none"
             placeholder="Add a skill (e.g., Python, React, AWS)"
           />
           <button
@@ -411,12 +561,12 @@ export default function ProfilePage() {
           Cover Letter Template
         </h2>
         <textarea
-          value={profile.cover_letter_template}
+          value={profile.cover_letter_template || ''}
           onChange={(e) =>
             setProfile({ ...profile, cover_letter_template: e.target.value })
           }
           rows={8}
-          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all resize-none"
+          className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-teal-500 outline-none resize-none"
           placeholder="Write a cover letter template that will be used for job applications..."
         />
       </motion.div>
@@ -426,6 +576,7 @@ export default function ProfilePage() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
+        className="pb-10"
       >
         <button
           onClick={handleSaveProfile}

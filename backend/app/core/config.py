@@ -43,7 +43,8 @@ class Settings(BaseSettings):
     SELENIUM_TIMEOUT: int = 30
     SELENIUM_URL: str = "http://selenium-hub:4444/wd/hub"
     MAX_CONCURRENT_APPLICATIONS: int = 5
-    
+    LINKEDIN_LI_AT: str = ""  # LinkedIn Session Cookie
+
     # Job Crawler Settings
     CRAWLER_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     CRAWLER_RATE_LIMIT: int = 2  # seconds between requests

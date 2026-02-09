@@ -49,6 +49,12 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(applications.router, prefix="/api/v1/applications", tags=["applications"])
 
+# Mount static files
+from fastapi.staticfiles import StaticFiles
+import os
+os.makedirs("/app/storage/screenshots", exist_ok=True)
+app.mount("/static", StaticFiles(directory="/app/storage"), name="static")
+
 
 @app.get("/")
 async def root():

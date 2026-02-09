@@ -24,6 +24,7 @@ interface Application {
   created_at: string;
   applied_at?: string;
   error_message?: string;
+  screenshot_url?: string;
   job: {
     id: number;
     title: string;
@@ -35,13 +36,13 @@ interface Application {
 }
 
 const statusColors: Record<string, string> = {
-  PENDING: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
-  IN_PROGRESS: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
-  APPLIED: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
-  FAILED: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
-  REJECTED: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
-  INTERVIEW: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
-  ACCEPTED: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
+  pending: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
+  in_progress: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  applied: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  rejected: 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
+  interview: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  accepted: 'bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400',
 };
 
 export default function ApplicationsPage() {
@@ -87,12 +88,28 @@ export default function ApplicationsPage() {
     }
   };
 
+  const handleRetry = async (jobId: number) => {
+    try {
+      await axios.post(
+        `${API_URL}/api/v1/applications/apply`,
+        { job_id: jobId },
+        {
+          headers: { Authorization: `Bearer ${session?.accessToken}` },
+        }
+      );
+      toast.success('Retrying application...');
+      fetchApplications();
+    } catch (error: any) {
+      toast.error(error.response?.data?.detail || 'Failed to retry application');
+    }
+  };
+
   const filters = [
     { value: 'all', label: 'All' },
-    { value: 'PENDING', label: 'Pending' },
-    { value: 'APPLIED', label: 'Applied' },
-    { value: 'INTERVIEW', label: 'Interview' },
-    { value: 'REJECTED', label: 'Rejected' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'applied', label: 'Applied' },
+    { value: 'interview', label: 'Interview' },
+    { value: 'rejected', label: 'Rejected' },
   ];
 
   return (
@@ -127,10 +144,9 @@ export default function ApplicationsPage() {
             onClick={() => setFilter(f.value)}
             className={`
               px-6 py-3 rounded-xl font-medium whitespace-nowrap transition-all
-              ${
-                filter === f.value
-                  ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg'
-                  : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
+              ${filter === f.value
+                ? 'bg-gradient-to-r from-teal-500 to-teal-600 text-white shadow-lg'
+                : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'
               }
             `}
           >
@@ -166,9 +182,8 @@ export default function ApplicationsPage() {
                         {app.job.title}
                       </h3>
                       <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                          statusColors[app.status] || statusColors.PENDING
-                        }`}
+                        className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${statusColors[app.status] || statusColors.pending
+                          }`}
                       >
                         {app.status.replace('_', ' ')}
                       </span>
@@ -215,16 +230,38 @@ export default function ApplicationsPage() {
                     href={app.job.source_url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-4 py-2 rounded-xl border-2 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all flex items-center gap-2 text-sm whitespace-nowrap"
+                    className="px-4 py-2 rounded-xl border-2 border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all flex items-center gap-2 text-sm whitespace-nowrap justify-center"
                   >
                     <ExternalLink className="w-4 h-4" />
                     View Job
                   </a>
 
-                  {(app.status === 'PENDING' || app.status === 'FAILED') && (
+                  {app.status === 'failed' && (
+                    <button
+                      onClick={() => handleRetry(app.job.id)}
+                      className="px-4 py-2 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-900/50 transition-all flex items-center gap-2 text-sm whitespace-nowrap justify-center"
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                      Retry
+                    </button>
+                  )}
+
+                  {app.screenshot_url && (
+                    <a
+                      href={`${API_URL}${app.screenshot_url}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-4 py-2 rounded-xl bg-red-50 dark:bg-red-900/10 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all flex items-center gap-2 text-sm whitespace-nowrap justify-center border border-red-200 dark:border-red-900/50"
+                    >
+                      <FileText className="w-4 h-4" />
+                      View Error
+                    </a>
+                  )}
+
+                  {(app.status === 'pending' || app.status === 'failed') && (
                     <button
                       onClick={() => handleDelete(app.id)}
-                      className="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-all flex items-center gap-2 text-sm whitespace-nowrap"
+                      className="px-4 py-2 rounded-xl bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-all flex items-center gap-2 text-sm whitespace-nowrap justify-center"
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete
